@@ -44,6 +44,8 @@ const DEFAULT_CONFIG = {
   }
 };
 
+export type QuantumConnectorOptions = Partial<typeof DEFAULT_CONFIG>;
+
 // Circuit breaker states
 enum CircuitState {
   CLOSED,   // Normal operation - requests are allowed
@@ -92,7 +94,7 @@ export class QuantumConnector extends EventEmitter {
   private cache: NodeCache;
   private metrics: RequestMetrics[] = [];
   private lastCircuitReset: number = Date.now();
-  private metricFlushInterval: NodeJS.Timeout = setTimeout(() => {}, 0);
+  private metricFlushInterval: NodeJS.Timeout | null = null;
 
   /**
    * Create a new QuantumConnector
@@ -100,11 +102,18 @@ export class QuantumConnector extends EventEmitter {
    * @param apiKey - The API key for authentication
    * @param customConfig - Custom configuration options
    */
-  constructor(baseUrl: string, apiKey: string, customConfig: Partial<typeof DEFAULT_CONFIG> = {}) {
+  constructor(baseUrl: string, apiKey: string, customConfig: QuantumConnectorOptions = {}) {
     super();
     
-    // Merge default config with custom config
-    this.config = { ...DEFAULT_CONFIG, ...customConfig };
+    // Merge default config with custom config (shallow + one-level deep merge for nested objects)
+    this.config = {
+      ...DEFAULT_CONFIG,
+      ...customConfig,
+      circuitBreaker: { ...DEFAULT_CONFIG.circuitBreaker, ...customConfig.circuitBreaker },
+      retry: { ...DEFAULT_CONFIG.retry, ...customConfig.retry },
+      cache: { ...DEFAULT_CONFIG.cache, ...customConfig.cache },
+      metrics: { ...DEFAULT_CONFIG.metrics, ...customConfig.metrics },
+    };
     
     // Initialize cache
     this.cache = new NodeCache({
@@ -129,7 +138,11 @@ export class QuantumConnector extends EventEmitter {
       this.metricFlushInterval = setInterval(() => this.flushMetrics(), 60000);
     }
     
-    console.log(`QuantumConnector initialized with base URL: ${baseUrl}`);
+    console.error(`QuantumConnector initialized with base URL: ${baseUrl}`);
+  }
+
+  private isCacheExcluded(endpoint: string): boolean {
+    return this.config.cache.excludedEndpoints.some((excluded) => endpoint.startsWith(excluded));
   }
 
   /**
@@ -169,7 +182,7 @@ export class QuantumConnector extends EventEmitter {
       }
       
       // Check cache for GET requests if caching is enabled
-      if (this.config.cache.enabled && method === 'GET' && !skipCache) {
+      if (this.config.cache.enabled && method === 'GET' && !skipCache && !this.isCacheExcluded(endpoint)) {
         const cacheKey = this.getCacheKey(config);
         const cachedResponse = this.cache.get<CachedResponse>(cacheKey);
         
@@ -235,7 +248,7 @@ export class QuantumConnector extends EventEmitter {
     this.circuitState = CircuitState.CLOSED;
     this.failureCount = 0;
     this.lastCircuitReset = Date.now();
-    console.log('Circuit breaker reset to CLOSED state');
+    console.error('Circuit breaker reset to CLOSED state');
   }
 
   /**
@@ -243,7 +256,7 @@ export class QuantumConnector extends EventEmitter {
    */
   public clearCache() {
     this.cache.flushAll();
-    console.log('Cache cleared');
+    console.error('Cache cleared');
   }
 
   /**
@@ -294,7 +307,7 @@ export class QuantumConnector extends EventEmitter {
     if (this.circuitState === CircuitState.HALF_OPEN) {
       this.circuitState = CircuitState.CLOSED;
       this.failureCount = 0;
-      console.log('Circuit half-open request succeeded - circuit closed');
+      console.error('Circuit half-open request succeeded - circuit closed');
     } else if (this.circuitState === CircuitState.CLOSED) {
       this.failureCount = Math.max(0, this.failureCount - 1);
     }
@@ -309,7 +322,7 @@ export class QuantumConnector extends EventEmitter {
       setTimeout(() => {
         this.circuitState = CircuitState.HALF_OPEN;
       }, this.config.circuitBreaker.resetTimeout);
-      console.log('Circuit half-open request failed - circuit opened');
+      console.error('Circuit half-open request failed - circuit opened');
     } else if (this.circuitState === CircuitState.CLOSED) {
       this.failureCount++;
       
@@ -319,10 +332,10 @@ export class QuantumConnector extends EventEmitter {
         
         setTimeout(() => {
           this.circuitState = CircuitState.HALF_OPEN;
-          console.log('Circuit breaker reset to HALF_OPEN state');
+          console.error('Circuit breaker reset to HALF_OPEN state');
         }, this.config.circuitBreaker.resetTimeout);
         
-        console.log('Circuit opened due to too many failures');
+        console.error('Circuit opened due to too many failures');
       }
     }
   }
@@ -352,7 +365,7 @@ export class QuantumConnector extends EventEmitter {
         this.handleSuccess();
         
         // Cache the response if it's a GET request and caching is enabled
-        if (this.config.cache.enabled && config.method?.toUpperCase() === 'GET') {
+        if (this.config.cache.enabled && config.method?.toUpperCase() === 'GET' && !this.isCacheExcluded(config.url || '')) {
           const cacheKey = this.getCacheKey(config);
           const ttl = this.getTtl(config.url || '');
           
@@ -378,8 +391,10 @@ export class QuantumConnector extends EventEmitter {
         
         // Check if we should retry
         const shouldRetry = 
-          retries < this.config.retry.maxRetries && 
-          this.config.retry.retryableStatusCodes.includes(status);
+          retries < this.config.retry.maxRetries && (
+            status === undefined ||
+            this.config.retry.retryableStatusCodes.includes(status)
+          );
         
         if (!shouldRetry) {
           throw error;

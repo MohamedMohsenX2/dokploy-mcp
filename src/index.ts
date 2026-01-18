@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import { DokployClient } from './dokploy-client';
-import { QuantumConnector } from './quantum-connector';
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file
@@ -13,10 +12,7 @@ const DOKPLOY_API_URL = process.env.DOKPLOY_API_URL || 'http://localhost:3000/ap
 const DOKPLOY_API_KEY = process.env.DOKPLOY_API_KEY || '';
 
 // Initialize Dokploy client
-const dokployClient = new DokployClient(DOKPLOY_API_URL, DOKPLOY_API_KEY);
-
-// Initialize Quantum Connector with enhanced capabilities
-const quantumConnector = new QuantumConnector(DOKPLOY_API_URL, DOKPLOY_API_KEY, {
+const dokployClient = new DokployClient(DOKPLOY_API_URL, DOKPLOY_API_KEY, {
   circuitBreaker: {
     failureThreshold: 3,      // Open circuit after 3 consecutive failures
     resetTimeout: 10000,      // Wait 10 seconds before trying again
@@ -118,14 +114,14 @@ app.post('/', function(req, res) {
       
       // First handle our system tools that use the quantum connector
       if (name === 'dokploy_system_status') {
-        result = quantumConnector.getStatus();
+        result = dokployClient.getQuantumStatus();
       } 
       else if (name === 'dokploy_system_clear_cache') {
-        quantumConnector.clearCache();
+        dokployClient.clearQuantumCache();
         result = { success: true, message: 'Cache cleared successfully' };
       }
       else if (name === 'dokploy_system_reset_circuit_breaker') {
-        quantumConnector.resetCircuitBreaker();
+        dokployClient.resetQuantumCircuitBreaker();
         result = { success: true, message: 'Circuit breaker reset successfully' };
       }
       // For all other tools, use the original implementation
@@ -155,11 +151,11 @@ app.post('/', function(req, res) {
 app.get('/health', function(req, res) {
   res.json({
     status: 'ok',
-    version: '1.0.0',
+    version: '2.0.0',
     apiUrl: DOKPLOY_API_URL,
     hasApiKey: !!DOKPLOY_API_KEY,
     quantum: {
-      status: quantumConnector.getStatus()
+      status: dokployClient.getQuantumStatus()
     }
   });
 });

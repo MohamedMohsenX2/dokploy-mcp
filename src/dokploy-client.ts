@@ -1,71 +1,65 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import { QuantumConnector, QuantumConnectorOptions } from './quantum-connector';
 
 /**
  * DokployClient - A client for interacting with the Dokploy API
  */
 export class DokployClient {
   private client: AxiosInstance;
+  private quantumConnector: QuantumConnector;
   
   /**
    * Create a new DokployClient
    * @param baseUrl - The base URL of your Dokploy instance (e.g., 'https://your-dokploy-instance.com/api')
    * @param apiKey - Your Dokploy API key
+   * @param quantumConfig - Optional QuantumConnector configuration
    */
-  constructor(baseUrl: string, apiKey: string) {
+  constructor(baseUrl: string, apiKey: string, quantumConfig: QuantumConnectorOptions = {}) {
     // Normalize the base URL to ensure it doesn't end with a slash
-    if (baseUrl.endsWith('/')) {
-      baseUrl = baseUrl.slice(0, -1);
+    baseUrl = baseUrl.replace(/\/+$/, '');
+
+    // Dokploy expects the API base path to end with /api
+    if (!baseUrl.endsWith('/api')) {
+      console.error('Warning: DOKPLOY_API_URL should end with /api. Automatically appending /api.');
+      baseUrl = `${baseUrl}/api`;
     }
-    
-    // Remove any duplicate '/api' segments from the base URL
-    if (baseUrl.endsWith('/api') && baseUrl !== 'https://dokploy.dashstache.com/api') {
-      console.log('Warning: Base URL already ends with /api. This might cause issues with endpoint paths.');
-    }
-    
-    // Create the Axios client with the normalized base URL
+
+    // Initialize QuantumConnector (used under the hood via axios adapter)
+    this.quantumConnector = new QuantumConnector(baseUrl, apiKey, quantumConfig);
+
+    // Create the Axios client that delegates all requests through QuantumConnector
     this.client = axios.create({
       baseURL: baseUrl,
       headers: {
-        'accept': 'application/json', // Use lowercase 'accept' to match the cURL command
+        'accept': 'application/json',
         'Content-Type': 'application/json',
-        'x-api-key': apiKey // Use x-api-key header for authentication
-      }
-    });
-    
-    // Add a request interceptor to handle the URL structure correctly
-    this.client.interceptors.request.use((config) => {
-      // If the URL already includes '/api' and the path also starts with '/api',
-      // remove the duplicate '/api' from the path
-      if (baseUrl.includes('/api') && config.url && config.url.startsWith('/api/')) {
-        config.url = config.url.replace('/api/', '/');
-      }
-      
-      // Log the request for debugging
-      console.log(`Making request to: ${baseUrl}${config.url || ''}`);
-      console.log('Headers:', JSON.stringify(config.headers));
-      
-      return config;
-    });
-    
-    // Add a response interceptor to log responses for debugging
-    this.client.interceptors.response.use(
-      (response) => {
-        console.log(`Response status: ${response.status}`);
-        console.log(`Response data: ${JSON.stringify(response.data).substring(0, 200)}...`);
-        return response;
+        'x-api-key': apiKey
       },
-      (error) => {
-        console.error(`Error status: ${error.response?.status || 'Unknown'}`);
-        console.error(`Error message: ${error.response?.data?.message || error.message}`);
-        console.error(`Request URL: ${error.config?.url}`);
-        console.error(`Request method: ${error.config?.method}`);
-        console.error(`Request headers: ${JSON.stringify(error.config?.headers)}`);
-        return Promise.reject(error);
+      adapter: async (config) => {
+        const { adapter, ...requestConfig } = (config || {}) as any;
+        return (await this.quantumConnector.request(requestConfig as AxiosRequestConfig)) as AxiosResponse;
       }
-    );
-    
-    // Test the connection immediately
-    this.testConnection();
+    });
+
+    // Test the connection immediately (silently for MCP protocol)
+    // Disabled for MCP to avoid stdout pollution - connection will be tested on first use
+    // this.testConnection();
+  }
+
+  public getQuantumStatus() {
+    return this.quantumConnector.getStatus();
+  }
+
+  public getQuantumMetrics() {
+    return this.quantumConnector.getMetrics();
+  }
+
+  public clearQuantumCache() {
+    this.quantumConnector.clearCache();
+  }
+
+  public resetQuantumCircuitBreaker() {
+    this.quantumConnector.resetCircuitBreaker();
   }
   
   /**
@@ -73,10 +67,10 @@ export class DokployClient {
    */
   private async testConnection() {
     try {
-      console.log('Testing connection to Dokploy API...');
+      console.error('Testing connection to Dokploy API...');
       // Try to get the current user as a simple test
       const response = await this.client.get('/user.get');
-      console.log('Connection test successful!');
+      console.error('Connection test successful!');
       return response.data;
     } catch (error: any) {
       console.error('Connection test failed:');
@@ -215,16 +209,18 @@ export class DokployClient {
    * @param appName - The application name
    * @param description - Optional description of the application
    * @param projectId - The ID of the project to associate the application with
+   * @param environmentId - The ID of the environment (required)
    * @param serverId - Optional server ID
    * @returns The created application
    */
-  async createApplication(name: string, appName: string, description: string, projectId: string, serverId?: string) {
+  async createApplication(name: string, appName: string, description: string, projectId: string, environmentId: string, serverId?: string) {
     try {
       const data: Record<string, any> = { 
         name, 
         appName, 
         description, 
-        projectId 
+        projectId,
+        environmentId
       };
       
       if (serverId) data.serverId = serverId;
@@ -360,6 +356,44 @@ export class DokployClient {
       return response.data;
     } catch (error) {
       this.handleError(`Failed to save environment for application with ID ${applicationId}`, error);
+    }
+  }
+  
+  /**
+   * Save build type configuration for an application
+   * @param applicationId - The ID of the application
+   * @param buildType - The build type (dockerfile, heroku_buildpacks, paketo_buildpacks, nixpacks, static, railpack)
+   * @param dockerfile - Optional dockerfile name (default: "Dockerfile")
+   * @param dockerContextPath - Docker context path (default: "")
+   * @param dockerBuildStage - Docker build stage (default: "")
+   * @param herokuVersion - Optional Heroku version
+   * @param publishDirectory - Optional publish directory
+   * @returns The save result
+   */
+  async saveBuildType(
+    applicationId: string,
+    buildType: string,
+    dockerfile?: string,
+    dockerContextPath: string = '',
+    dockerBuildStage: string = '',
+    herokuVersion?: string,
+    publishDirectory?: string
+  ) {
+    try {
+      const data: Record<string, any> = {
+        applicationId,
+        buildType,
+        dockerContextPath,
+        dockerBuildStage
+      };
+      if (dockerfile) data.dockerfile = dockerfile;
+      if (herokuVersion) data.herokuVersion = herokuVersion;
+      if (publishDirectory) data.publishDirectory = publishDirectory;
+      
+      const response = await this.client.post('/application.saveBuildType', data);
+      return response.data;
+    } catch (error) {
+      this.handleError(`Failed to save build type for application with ID ${applicationId}`, error);
     }
   }
   
@@ -1075,14 +1109,50 @@ export class DokployClient {
    */
   async createDomain(applicationId: string, domain: string, options: Record<string, any> = {}) {
     try {
-      const data = { applicationId, domain, ...options };
+      // API expects 'host' not 'domain'
+      const data = { applicationId, host: domain, ...options };
       const response = await this.client.post('/domain.create', data);
       return response.data;
     } catch (error) {
       this.handleError('Failed to create domain', error);
     }
   }
-
+  
+  /**
+   * Save GitHub provider configuration for an application
+   * @param applicationId - The ID of the application
+   * @param config - GitHub provider configuration
+   * @returns The updated application
+   */
+  async saveGithubProvider(applicationId: string, config: {
+    repository: string;
+    branch: string;
+    owner: string;
+    githubId: string;
+    buildPath?: string;
+    watchPaths?: string[];
+    enableSubmodules?: boolean;
+    triggerType?: 'push' | 'tag';
+  }) {
+    try {
+      const data = {
+        applicationId,
+        repository: config.repository,
+        branch: config.branch,
+        owner: config.owner,
+        githubId: config.githubId,
+        buildPath: config.buildPath || '/',
+        watchPaths: config.watchPaths || [],
+        enableSubmodules: config.enableSubmodules || false,
+        triggerType: config.triggerType || 'push'
+      };
+      const response = await this.client.post('/application.saveGithubProvider', data);
+      return response.data;
+    } catch (error) {
+      this.handleError('Failed to save GitHub provider', error);
+    }
+  }
+  
   /**
    * Get domains by application ID
    * @param applicationId - The ID of the application
@@ -1464,6 +1534,24 @@ export class DokployClient {
       return response.data;
     } catch (error) {
       this.handleError(`Failed to get user with ID ${userId}`, error);
+    }
+  }
+
+  /**
+   * Create a new user
+   * @param email - The email of the user
+   * @param password - The password of the user
+   * @param role - Optional role for the user
+   * @returns The created user
+   */
+  async createUser(email: string, password: string, role?: string) {
+    try {
+      const data: Record<string, any> = { email, password };
+      if (role) data.role = role;
+      const response = await this.client.post('/user.create', data);
+      return response.data;
+    } catch (error) {
+      this.handleError('Failed to create user', error);
     }
   }
 

@@ -41,8 +41,15 @@ export const toolSchemas = {
       name: 'Required for create: Name of the application',
       appName: 'Required for create: Application identifier name',
       description: 'Optional for create/update: Description of the application',
+      environmentId: 'Required for create: ID of the environment (e.g., production, staging)',
       serverId: 'Optional for create: Server ID to deploy to',
-      env: 'Optional for create/update: Environment variables'
+      env: 'Optional for create/update: Environment variables',
+      branch: 'Optional for update: Git branch name',
+      repository: 'Optional for update: Repository name',
+      owner: 'Optional for update: Repository owner',
+      sourceType: 'Optional for update: Source type (github, gitlab, etc.)',
+      autoDeploy: 'Optional for update: Enable auto-deploy',
+      triggerType: 'Optional for update: Trigger type (push, tag)'
     }
   },
   
@@ -151,6 +158,76 @@ export const toolSchemas = {
       databaseType: 'Required for manual: Type of database (mysql, postgres, etc.)',
       projectId: 'Required for create: Project ID',
       name: 'Required for create: Backup name'
+    }
+  },
+  
+  /**
+   * SECURITY TOOLS (SSH Keys, Certificates, Registry)
+   */
+  dokploy_security: {
+    description: 'Manage security resources: SSH keys, certificates, registry credentials',
+    category: 'security',
+    parameters: {
+      action: 'Action to perform: list_ssh_keys, get_ssh_key, create_ssh_key, delete_ssh_key, list_certificates, get_certificate, create_certificate, delete_certificate, list_registries, get_registry, create_registry, delete_registry',
+      resourceType: 'Resource type: ssh_key, certificate, registry',
+      resourceId: 'Required for get/delete: Resource ID',
+      name: 'Required for create: Name of the resource',
+      publicKey: 'Required for create_ssh_key: Public key content',
+      privateKey: 'Required for create_ssh_key: Private key content',
+      certificate: 'Required for create_certificate: Certificate content',
+      certificateKey: 'Required for create_certificate: Certificate key',
+      username: 'Required for create_registry: Registry username',
+      password: 'Required for create_registry: Registry password',
+      registryUrl: 'Required for create_registry: Registry URL'
+    }
+  },
+  
+  /**
+   * AI TOOLS (Model Deployment)
+   */
+  dokploy_ai: {
+    description: 'Manage AI models and inference endpoints',
+    category: 'ai',
+    parameters: {
+      action: 'Action to perform: list, get, create, update, delete, deploy, get_suggestions',
+      aiId: 'Required for most actions: AI resource ID',
+      projectId: 'Required for create: Project ID',
+      name: 'Required for create: AI model name',
+      model: 'Optional for create: Model type or identifier',
+      config: 'Optional for create/update: Configuration options'
+    }
+  },
+  
+  /**
+   * ADMIN TOOLS (User Management)
+   */
+  dokploy_admin: {
+    description: 'Administrative tools for user and system management',
+    category: 'admin',
+    parameters: {
+      action: 'Action to perform: list_users, get_user, create_user, update_user, delete_user, assign_permissions, get_settings, update_settings',
+      userId: 'Required for user operations: User ID',
+      email: 'Required for create_user: User email',
+      password: 'Required for create_user: User password',
+      role: 'Optional for create/update_user: User role (admin, user)',
+      permissions: 'Optional for assign_permissions: Permission configuration',
+      settings: 'Optional for update_settings: Settings configuration'
+    }
+  },
+  
+  /**
+   * COMPOSE TOOLS (Docker Compose)
+   */
+  dokploy_compose: {
+    description: 'Manage Docker Compose applications',
+    category: 'infrastructure',
+    parameters: {
+      action: 'Action to perform: list, get, create, update, delete, deploy, start, stop, redeploy',
+      composeId: 'Required for most actions: Compose ID',
+      projectId: 'Required for create: Project ID',
+      name: 'Required for create: Compose name',
+      composeFile: 'Required for create/update: Docker Compose file content',
+      environmentId: 'Required for create: Environment ID'
     }
   },
   

@@ -29,6 +29,8 @@ ehthumbs.db
 Thumbs.db
 
 # Editor directories and files
+.claude/
+.cursor/
 .idea/
 .vscode/
 *.swp
@@ -47,3 +49,4 @@ temp/
 test-client.ts
 endpoint-test.ts
 endpoint-test-report-*.json
+test-*.sh

@@ -13,13 +13,14 @@
     "LICENSE"
   ],
   "scripts": {
-    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
-    "build": "npm run clean && tsc && node -e \"try{require('fs').chmodSync('dist/mcp-server.js',0o755)}catch(e){}\"",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true}); require('fs').rmSync('.tsbuildinfo',{force:true})\"",
+    "build": "tsc && node -e \"try{require('fs').chmodSync('dist/mcp-server.js',0o755)}catch(e){}\"",
+    "build:clean": "npm run clean && npm run build",
     "start": "node dist/mcp-server.js",
     "dev": "ts-node src/mcp-server.ts",
-    "test": "npm run build",
+    "test": "npm run build:clean",
     "prepublishOnly": "npm test",
-    "prepack": "npm run build"
+    "prepack": "npm run build:clean"
   },
   "keywords": [
     "dokploy",

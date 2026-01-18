@@ -14,6 +14,7 @@ yarn-error.log*
 # Build output
 dist/
 build/
+.tsbuildinfo
 
 # Logs
 logs

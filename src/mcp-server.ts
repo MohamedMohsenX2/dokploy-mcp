@@ -68,29 +68,26 @@ const server = new Server(
   }
 )
 
-// Helper to determine required parameters for each tool
-function getRequiredParams(toolName: string): string[] {
-  void toolName
-  return ['action']
-}
+// Pre-compute MCP tools at module load time to avoid delays
+const mcpTools: Tool[] = Object.entries(toolSchemas).map(([name, schema]) => ({
+  name,
+  description: schema.description,
+  inputSchema: {
+    type: 'object',
+    properties: Object.entries(schema.parameters).reduce((acc, [key, desc]) => {
+      acc[key] = {
+        type: ['string', 'number', 'boolean', 'array', 'object'],
+        description: desc as string,
+      }
+      return acc
+    }, {} as Record<string, any>),
+    required: ['action'], // All tools require action parameter
+  },
+}))
 
-// Convert consolidated tool schemas to MCP Tool format
+// Return pre-computed tools instantly
 function getMCPTools(): Tool[] {
-  return Object.entries(toolSchemas).map(([name, schema]) => ({
-    name,
-    description: schema.description,
-    inputSchema: {
-      type: 'object',
-      properties: Object.entries(schema.parameters).reduce((acc, [key, desc]) => {
-        acc[key] = {
-          type: ['string', 'number', 'boolean', 'array', 'object'],
-          description: desc as string,
-        }
-        return acc
-      }, {} as Record<string, any>),
-      required: getRequiredParams(name),
-    },
-  }))
+  return mcpTools
 }
 
 // List available tools
@@ -268,7 +265,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           result = await getDokployClient().startApplication(args.applicationId as string)
           break
         default:
-          throw new Error(`Unknown action: ${action}. Supported actions: list, get, create, update, delete, deploy, restart, stop, start, redeploy, configure_github`)
+          throw new Error(`Unknown action: ${action}. Supported actions: list, get, create, update, delete, deploy, restart, stop, start, redeploy, configure_github, save_build_type`)
       }
     }
     // Handle dokploy_domain tool
@@ -810,7 +807,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // Handle dokploy_security tool
     else if (name === 'dokploy_security') {
       const action = args?.action as string
-      const resourceType = args?.resourceType as string
       
       switch (action) {
         case 'list_ssh_keys':
@@ -1067,18 +1063,69 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 })
 
-// Start the server
-async function main() {
+// Store transport reference for graceful shutdown
+let transport: StdioServerTransport | null = null
+
+// Graceful shutdown handler
+async function shutdown(signal: string) {
+  console.error(`\n${signal} received, shutting down gracefully...`)
+  
   try {
-    const transport = new StdioServerTransport()
-    await server.connect(transport)
-    // Log to stderr only - stdout is for JSON-RPC messages
-    console.error(`Dokploy MCP server v2.0.0 running on stdio with ${Object.keys(toolSchemas).length} tools`)
+    // Cleanup DokployClient resources (intervals, timers)
+    if (dokployClient) {
+      dokployClient.cleanup()
+    }
+    
+    // Close server connection if transport exists
+    if (transport) {
+      // Note: MCP SDK doesn't expose a close method on transport,
+      // but we can at least clean up our resources
+      console.error('Cleaning up MCP server resources...')
+    }
+    
+    console.error('Shutdown complete')
+    process.exit(0)
   } catch (error) {
-    console.error('Fatal error in MCP server:', error)
+    console.error('Error during shutdown:', error)
     process.exit(1)
   }
 }
 
-// Start immediately - no blocking operations
-main()
+// Register signal handlers for graceful shutdown
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught exception:', error)
+  shutdown('uncaughtException').catch(() => process.exit(1))
+})
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled rejection at:', promise, 'reason:', reason)
+  shutdown('unhandledRejection').catch(() => process.exit(1))
+})
+
+// Start the server
+async function main() {
+  try {
+    transport = new StdioServerTransport()
+    await server.connect(transport)
+
+    // Critical: Keep stdin open to maintain the connection
+    process.stdin.resume()
+
+    // Only log after successful connection (to stderr)
+    console.error(`Dokploy MCP server v2.0.0 ready with ${Object.keys(toolSchemas).length} tools`)
+  } catch (error) {
+    console.error('Fatal error in MCP server:', error)
+    await shutdown('startup-error')
+  }
+}
+
+// Start immediately
+main().catch(async (error) => {
+  console.error('Fatal error during startup:', error)
+  await shutdown('startup-fatal')
+})

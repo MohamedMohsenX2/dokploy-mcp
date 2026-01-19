@@ -11,7 +11,7 @@
  */
 
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import NodeCache from 'node-cache';
+import NodeCache = require('node-cache');
 import { EventEmitter } from 'events';
 
 // Configuration defaults
@@ -257,6 +257,21 @@ export class QuantumConnector extends EventEmitter {
   public clearCache() {
     this.cache.flushAll();
     console.error('Cache cleared');
+  }
+
+  /**
+   * Cleanup resources (intervals, timers, etc.)
+   * Should be called during graceful shutdown
+   */
+  public cleanup() {
+    if (this.metricFlushInterval) {
+      clearInterval(this.metricFlushInterval);
+      this.metricFlushInterval = null;
+    }
+    // Clear any pending timeouts from circuit breaker
+    // Note: We can't track all setTimeout calls, but the main one is the interval
+    this.removeAllListeners();
+    console.error('QuantumConnector cleaned up');
   }
 
   /**

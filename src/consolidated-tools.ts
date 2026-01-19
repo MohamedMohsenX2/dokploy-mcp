@@ -35,7 +35,7 @@ export const toolSchemas = {
     description: 'Manage applications within projects (list, get, create, update, delete, deploy, restart, stop, start)',
     category: 'core',
     parameters: {
-      action: 'Action to perform: list, get, create, update, delete, deploy, restart, stop, start, redeploy',
+      action: 'Action to perform: list, get, create, update, delete, deploy, restart, stop, start, redeploy, configure_github, save_build_type',
       projectId: 'Required for list: ID of the project containing applications',
       applicationId: 'Required for most actions: ID of the application',
       name: 'Required for create: Name of the application',
@@ -49,7 +49,11 @@ export const toolSchemas = {
       owner: 'Optional for update: Repository owner',
       sourceType: 'Optional for update: Source type (github, gitlab, etc.)',
       autoDeploy: 'Optional for update: Enable auto-deploy',
-      triggerType: 'Optional for update: Trigger type (push, tag)'
+      triggerType: 'Optional for update: Trigger type (push, tag)',
+      buildType: 'Required for save_build_type: Build type (dockerfile, heroku_buildpacks, paketo_buildpacks, nixpacks, static, railpack)',
+      dockerfile: 'Optional for save_build_type: Dockerfile name (default: Dockerfile)',
+      dockerContextPath: 'Optional for save_build_type: Docker context path (default: empty string)',
+      dockerBuildStage: 'Optional for save_build_type: Docker build stage (default: empty string)'
     }
   },
   
@@ -169,7 +173,6 @@ export const toolSchemas = {
     category: 'security',
     parameters: {
       action: 'Action to perform: list_ssh_keys, get_ssh_key, create_ssh_key, delete_ssh_key, list_certificates, get_certificate, create_certificate, delete_certificate, list_registries, get_registry, create_registry, delete_registry',
-      resourceType: 'Resource type: ssh_key, certificate, registry',
       resourceId: 'Required for get/delete: Resource ID',
       name: 'Required for create: Name of the resource',
       publicKey: 'Required for create_ssh_key: Public key content',

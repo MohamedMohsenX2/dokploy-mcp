@@ -61,6 +61,13 @@ export class DokployClient {
   public resetQuantumCircuitBreaker() {
     this.quantumConnector.resetCircuitBreaker();
   }
+
+  /**
+   * Cleanup resources (should be called during graceful shutdown)
+   */
+  public cleanup() {
+    this.quantumConnector.cleanup();
+  }
   
   /**
    * Test the connection to the Dokploy API

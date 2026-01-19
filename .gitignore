@@ -51,3 +51,14 @@ test-client.ts
 endpoint-test.ts
 endpoint-test-report-*.json
 test-*.sh
+
+# Temporary analysis/debugging files
+BUILD_OPTIMIZATION.md
+PROFILING_RESULTS.md
+ROOT_CAUSE_ANALYSIS.md
+ROOT_CAUSE_FIX_PLAN.md
+VERIFICATION_SUMMARY.md
+PRE_RELEASE_CHECKLIST.md
+check-deployment-details.js
+update-and-deploy.js
+update-build-type.js

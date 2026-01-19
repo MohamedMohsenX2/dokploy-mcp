@@ -27,6 +27,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved error handling and resource management
 - Enhanced production readiness with proper cleanup mechanisms
 
-## [2.0.0] - Previous Release
+## [2.0.0] - 2026-01-18
 
-Initial stable release with full Dokploy API support.
+### Added
+- **MCP Protocol**: Complete stdio-based MCP protocol implementation using `@modelcontextprotocol/sdk`
+  - Full compatibility with Cursor, Claude Code, and all MCP clients
+  - Proper tool registration and request handling
+  - Standard MCP protocol compliance
+- **Quantum Connector**: Advanced connection management system
+  - Circuit breaker pattern to prevent cascading failures
+  - Intelligent retry logic with exponential backoff
+  - Response caching with configurable TTL
+  - Request prioritization and deduplication
+  - Comprehensive metrics and logging
+- **15 Consolidated Tools**: Unified tool interface for Dokploy API
+  - `dokploy_project` - Project management (list, get, create, update, delete)
+  - `dokploy_application` - Application lifecycle management (deploy, restart, stop, start, etc.)
+  - `dokploy_server` - Server management and setup
+  - `dokploy_docker` - Docker container operations
+  - `dokploy_domain` - Domain and certificate management
+  - `dokploy_monitoring` - Application monitoring and logs
+  - `dokploy_diagnostics` - Diagnostic tools for troubleshooting
+  - `dokploy_deployment` - Deployment and CI/CD operations
+  - `dokploy_database` - Database management (MySQL, PostgreSQL, MongoDB, Redis, MariaDB)
+  - `dokploy_backup` - Backup management
+  - `dokploy_security` - SSH keys, certificates, registry credentials
+  - `dokploy_ai` - AI model deployment and inference
+  - `dokploy_admin` - User and system management
+  - `dokploy_compose` - Docker Compose applications
+  - `dokploy_system` - MCP server health and management
+- **Enhanced Error Handling**: Comprehensive error handling with detailed messages and recovery suggestions
+- **Parameter Validation**: Full parameter validation with clear error messages for all tools
+- **Type Safety**: Complete TypeScript implementation with proper type definitions
+
+### Changed
+- **Architecture**: Complete rewrite with proper MCP protocol implementation
+- **Initialization**: Optimized server startup with lazy client initialization
+- **Input Types**: Flexible tool schemas accepting string, number, boolean, array, and object types
+- **Action-Based Tools**: All consolidated tools use action-based operation semantics
+
+### Performance
+- Lazy initialization for faster startup
+- Request caching to reduce API calls
+- Optimized timeout configurations
+- Efficient resource management
+
+### Documentation
+- Comprehensive README with installation and usage instructions
+- API cheatsheet for reference
+- Troubleshooting guide for common issues

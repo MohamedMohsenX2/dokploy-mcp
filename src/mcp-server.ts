@@ -9,6 +9,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import type { CallToolRequest } from '@modelcontextprotocol/sdk/types.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -96,7 +97,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 }))
 
 // Handle tool calls
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
   const { name, arguments: args } = request.params
 
   try {
@@ -433,11 +434,69 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           if (!args?.appName) {
             throw new Error('appName is required for find_by_app action')
           }
-          result = await getDokployClient().getDockerContainersByAppNameMatch(
-            args.appName as string,
-            args?.appType as string | undefined,
-            args?.serverId as string | undefined
-          )
+          const appName = args.appName as string
+          const appType = args?.appType as string | undefined
+          const serverId = args?.serverId as string | undefined
+          
+          // If appType is "application", automatically use find_by_label with type="standalone"
+          // since find_by_app only accepts "stack" or "docker-compose" per API spec
+          if (appType && appType.toLowerCase() === 'application') {
+            try {
+              result = await getDokployClient().getDockerContainersByAppLabel(
+                appName,
+                'standalone',
+                serverId
+              )
+              break
+            } catch (error: any) {
+              throw new Error(
+                `Failed to find containers for application "${appName}" using find_by_label. ` +
+                `Error: ${error.message}. ` +
+                `Note: For application containers, use find_by_label with type="standalone" or "swarm".`
+              )
+            }
+          }
+
+          // For valid appType values ("stack" or "docker-compose"), use find_by_app
+          try {
+            result = await getDokployClient().getDockerContainersByAppNameMatch(
+              appName,
+              appType,
+              serverId
+            )
+          } catch (error: any) {
+            // If find_by_app fails, try fallback methods
+            // Try find_by_label with "standalone" as fallback
+            try {
+              result = await getDokployClient().getDockerContainersByAppLabel(
+                appName,
+                'standalone',
+                serverId
+              )
+              break
+            } catch (labelError: any) {
+              // Continue to next fallback
+            }
+
+            // Try find_stack as last resort
+            try {
+              result = await getDokployClient().getStackContainersByAppName(
+                appName,
+                serverId
+              )
+              break
+            } catch (stackError: any) {
+              // All fallbacks failed
+            }
+
+            // If all methods fail, throw the original error with context
+            throw new Error(
+              `Failed to find containers for app "${appName}". ` +
+              `Original error: ${error.message}. ` +
+              `Tried fallback methods: find_by_label (standalone), find_stack. ` +
+              `All methods failed. Please verify the app name exists and is accessible.`
+            )
+          }
           break
         case 'find_by_label':
           if (!args?.appName || !args?.type) {

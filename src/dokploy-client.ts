@@ -2466,7 +2466,8 @@ export class DokployClient {
    */
   async createServer(name: string, ip: string, sshKeyId: string, options: Record<string, any> = {}) {
     try {
-      const data = { name, ip, sshKeyId, ...options };
+      // API expects ipAddress, not ip
+      const data = { name, ipAddress: ip, sshKeyId, ...options };
       const response = await this.client.post('/server.create', data);
       return response.data;
     } catch (error) {
@@ -3011,23 +3012,36 @@ export class DokployClient {
 
   /**
    * Get Docker containers by application name match
+   *
+   * Note: The Dokploy API only accepts "stack" or "docker-compose" as valid appType values.
+   * If an invalid appType is provided, it will be silently ignored. For "application" type
+   * containers, use getDockerContainersByAppLabel() with type="standalone" instead.
+   *
    * @param appName - The name of the application
-   * @param appType - Optional application type
+   * @param appType - Optional application type (must be "stack" or "docker-compose" per API spec)
    * @param serverId - Optional server ID
    * @returns Docker containers
    */
   async getDockerContainersByAppNameMatch(appName: string, appType?: string, serverId?: string) {
     try {
       const params: Record<string, string> = { appName };
+
+      // Validate appType: API only accepts "stack" or "docker-compose" per OpenAPI spec
+      // If appType is provided but invalid, skip it (it's optional) to avoid API errors
       if (appType) {
-        params.appType = appType;
+        const validAppTypes = ['stack', 'docker-compose'];
+        if (validAppTypes.includes(appType.toLowerCase())) {
+          params.appType = appType.toLowerCase();
+        }
       }
+
       if (serverId) {
         params.serverId = serverId;
       }
+
       const response = await this.client.get('/docker.getContainersByAppNameMatch', { params });
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.handleError('Failed to get Docker containers by application name match', error);
     }
   }
@@ -3203,37 +3217,60 @@ export class DokployClient {
   
   /**
    * Handle errors from API calls
-   * @param message - Error message
-   * @param error - Error object
+   *
+   * Logs error details to console and optionally throws a formatted error with context
+   * from the API response. Error messages include status codes and API-provided details
+   * when available.
+   *
+   * @param message - Base error message describing the operation that failed
+   * @param error - Error object from the API call (typically axios error)
    * @param throwError - Whether to throw an error (default: true)
    * @returns null if throwError is false, otherwise throws an error
    */
   private handleError(message: string, error: any, throwError: boolean = true) {
     console.error(message);
+
+    let detailedMessage = message;
+
     if (error.response) {
-      console.error(`Status: ${error.response.status}`);
-      console.error(`Data: ${JSON.stringify(error.response.data)}`);
-      
-      // Provide more specific error messages based on status code
-      if (error.response.status === 401) {
+      const status = error.response.status;
+      const responseData = error.response.data;
+
+      console.error(`Status: ${status}`);
+      console.error(`Data: ${JSON.stringify(responseData)}`);
+
+      // Extract API error message if available
+      const apiMessage = responseData?.message || responseData?.error;
+
+      // Log user-friendly status-specific messages
+      if (status === 401) {
         console.error('Authentication failed. Please check your API key.');
-      } else if (error.response.status === 403) {
+      } else if (status === 403) {
         console.error('Permission denied. Your API key may not have access to this resource.');
-      } else if (error.response.status === 404) {
+      } else if (status === 404) {
         console.error('Resource not found. Please check the endpoint URL.');
-      } else if (error.response.status >= 500) {
+      } else if (status >= 500) {
         console.error('Server error. The Dokploy API may be experiencing issues.');
+      }
+
+      // Build detailed message: prefer API message, fallback to status code
+      if (apiMessage) {
+        detailedMessage = `${message}: ${apiMessage}`;
+      } else {
+        detailedMessage = `${message} (HTTP ${status})`;
       }
     } else if (error.request) {
       console.error('No response received. The Dokploy API may be unreachable.');
+      detailedMessage = `${message}: No response received from API`;
     } else {
       console.error(`Error: ${error.message}`);
+      detailedMessage = `${message}: ${error.message}`;
     }
-    
+
     if (throwError) {
-      throw new Error(message);
+      throw new Error(detailedMessage);
     }
-    
+
     return null;
   }
 }

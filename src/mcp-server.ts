@@ -70,21 +70,28 @@ const server = new Server(
 )
 
 // Pre-compute MCP tools at module load time to avoid delays
-const mcpTools: Tool[] = Object.entries(toolSchemas).map(([name, schema]) => ({
-  name,
-  description: schema.description,
-  inputSchema: {
-    type: 'object',
-    properties: Object.entries(schema.parameters).reduce((acc, [key, desc]) => {
-      acc[key] = {
-        type: ['string', 'number', 'boolean', 'array', 'object'],
-        description: desc as string,
-      }
-      return acc
-    }, {} as Record<string, any>),
-    required: ['action'], // All tools require action parameter
-  },
-}))
+let mcpTools: Tool[] = []
+try {
+  mcpTools = Object.entries(toolSchemas).map(([name, schema]) => ({
+    name,
+    description: schema.description,
+    inputSchema: {
+      type: 'object',
+      properties: Object.entries(schema.parameters).reduce((acc, [key, desc]) => {
+        acc[key] = {
+          type: ['string', 'number', 'boolean', 'array', 'object'],
+          description: desc as string,
+        }
+        return acc
+      }, {} as Record<string, any>),
+      required: ['action'], // All tools require action parameter
+    },
+  }))
+  console.error(`Loaded ${mcpTools.length} tools successfully`)
+} catch (error) {
+  console.error('Error loading tool schemas:', error)
+  // Continue with empty tools array - server will still start but won't have tools
+}
 
 // Return pre-computed tools instantly
 function getMCPTools(): Tool[] {
@@ -1169,16 +1176,25 @@ process.on('unhandledRejection', (reason, promise) => {
 // Start the server
 async function main() {
   try {
+    // Log startup attempt (to stderr, as stdout is for MCP protocol)
+    console.error('Starting Dokploy MCP server...')
+    
     transport = new StdioServerTransport()
     await server.connect(transport)
 
     // Critical: Keep stdin open to maintain the connection
     process.stdin.resume()
 
-    // Only log after successful connection (to stderr)
+    // Log successful startup (to stderr)
     console.error(`Dokploy MCP server v2.0.0 ready with ${Object.keys(toolSchemas).length} tools`)
+    console.error(`API URL: ${DOKPLOY_API_URL}`)
+    console.error(`API Key configured: ${!!DOKPLOY_API_KEY}`)
   } catch (error) {
     console.error('Fatal error in MCP server:', error)
+    if (error instanceof Error) {
+      console.error('Error details:', error.message)
+      console.error('Stack:', error.stack)
+    }
     await shutdown('startup-error')
   }
 }

@@ -233,7 +233,7 @@ export const toolSchemas = {
       environmentId: 'Required for create: Environment ID'
     }
   },
-  
+
   /**
    * SYSTEM TOOLS (MCP Management)
    */

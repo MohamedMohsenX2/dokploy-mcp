@@ -767,6 +767,14 @@ This fork includes significant improvements and modifications over the original 
    ```
 4. **Check Network**: Ensure your Dokploy instance is accessible
 
+### Apps behind Traefik return 404 or appear stuck loading (Dokploy server)
+
+**Root cause:** Traefik on the Dokploy server uses an older Docker API client (e.g. 1.24). After a Docker daemon upgrade, the daemon can require a newer API (e.g. 1.44+). Traefik’s Docker provider then fails with “client version X is too old” and cannot discover container labels, so no routes are created. Apps behind Traefik then return 404 or appear to hang loading.
+
+**Fix (on the Dokploy server, not in this MCP repo):** Upgrade Traefik to **3.6.1+** on the server (supports Docker API 1.44+), or downgrade Docker on the server to 28.x. Once Traefik can talk to Docker again, the Docker provider discovers labels and routing works; Dokploy manages everything via the Domains tab.
+
+**Prevention:** On new Dokploy servers or after upgrading Docker on the host, ensure Traefik is 3.6.1+ (or Docker is 28.x). Upstream: [Dokploy #2990](https://github.com/Dokploy/dokploy/issues/2990).
+
 ### Cursor-Specific Issues
 
 - Use `@dokploy-mcp` prefix in prompts: `@dokploy-mcp list all projects`

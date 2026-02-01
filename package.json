@@ -1,6 +1,6 @@
 {
   "name": "dokploy-mcp",
-  "version": "2.0.0",
+  "version": "2.0.2",
   "description": "Model Context Protocol server for the Dokploy API",
   "main": "dist/mcp-server.js",
   "bin": {
@@ -33,7 +33,7 @@
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@modelcontextprotocol/sdk": "^1.25.3",
     "axios": "^1.9.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",

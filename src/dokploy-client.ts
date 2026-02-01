@@ -2362,7 +2362,7 @@ export class DokployClient {
       this.handleError(`Failed to remove notification channel with ID ${notificationId}`, error);
     }
   }
-  
+
   // SSH Key Management Endpoints
   
   /**
